@@ -80,13 +80,14 @@
   }
   .card h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:0 0 12px;font-weight:600;}
 
-  .rule-grid{display:flex;flex-direction:column;gap:10px;}
-  .rule-row{display:flex;align-items:center;gap:8px;}
-  .rule-row .label{width:52px;font-size:12.5px;color:var(--dim);flex-shrink:0;}
+  .rule-grid{display:flex;flex-direction:column;gap:14px;}
+  .rule-row{display:flex;flex-direction:column;gap:6px;}
+  .rule-row .label{font-size:12.5px;color:var(--dim);flex-shrink:0;}
+  .counts{display:flex;flex-wrap:wrap;gap:5px;}
   .count-btn{
-    width:26px;height:26px;border-radius:5px;border:1px solid var(--line);
-    background:#0f1512;color:var(--dim);font-family:var(--mono);font-size:12px;
-    cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;
+    width:24px;height:24px;border-radius:5px;border:1px solid var(--line);
+    background:#0f1512;color:var(--dim);font-family:var(--mono);font-size:11.5px;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;
   }
   .count-btn.on-birth{background:var(--live);border-color:var(--live);color:#0a1a12;font-weight:700;}
   .count-btn.on-survive{background:var(--accent);border-color:var(--accent);color:#241a05;font-weight:700;}
