@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D Automaton · Cellular Automaton Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Fredoka:wght@500;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="shared.js"></script>
+<style>table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:7px 10px;text-align:right;border-bottom:1px dashed var(--line)}th:first-child,td:first-child{text-align:left}th{color:var(--teal);font-family:'Fredoka',sans-serif}#board{cursor:grab}.sm{padding:7px 11px;margin:3px 3px 0 0}.field input.w{width:100%}</style>
+</head>
+<body>
+<div class="top">Life, one dimension up</div>
+<div class="brand"><h1 class="rainbow">3D Automaton</h1><p class="script">drag to rotate, 26 neighbors per cell</p></div>
+<nav><a href="index.html">Simulator</a><a href="sampler.html">Rule sampler</a><a href="noise.html">Noise sweep</a><a class="on" href="3d.html">3D</a><button id="themeBtn">Dark mode</button></nav>
+<div class="wrap">
+  <p class="intro">A cell has 26 neighbors (the surrounding 3×3×3 block). Rules are written like B6/S5-7, with counts from 0 to 26 separated by commas and ranges. Near cubes are warm, far cubes are cool. Edges wrap.</p>
+  <div class="rule-readout"><span class="lbl">current rule</span><span id="ruleText">B6/S5-7</span></div>
+  <div class="layout">
+    <div class="board-panel">
+      <canvas id="board"></canvas>
+      <div class="row">
+        <button class="btn primary" id="playBtn">Run</button><button class="btn" id="stepBtn">Step</button>
+        <button class="btn" id="clearBtn">Clear</button><button class="btn teal" id="randBtn">Random fill</button>
+        <span class="sp"></span><span class="mono" id="stat">gen 0</span>
+      </div>
+      <div class="row">Speed <input type="range" id="speed" min="1" max="30" value="8"><span id="speedL">8 fps</span><span class="sp"></span>
+        Fill density <input type="range" id="dens" min="5" max="60" value="25"><span id="densL">25%</span></div>
+      <div class="row">Fill region <input type="range" id="reg" min="20" max="100" value="50"><span id="regL">50%</span><span class="sp"></span>
+        <label><input type="checkbox" id="auto" checked> auto-rotate</label></div>
+    </div>
+    <div class="side">
+      <div class="card"><h2>Rule</h2>
+        <input id="ruleIn" style="width:100%;background:var(--bg);color:var(--ink);border:2px solid var(--line);border-radius:10px;padding:8px 10px;font:13px Poppins,sans-serif" value="B6/S5-7" aria-label="Rule">
+        <div class="lab">Presets</div>
+        <select id="pre"><option value="B6/S5-7">Bays-style 5766: B6/S5-7</option><option value="B5/S4-5">Bays-style 4555: B5/S4-5</option><option value="B4/S4">Try: B4/S4</option><option value="B5/S5-7">Try: B5/S5-7</option><option value="B6-8/S5-8">Try: B6-8/S5-8</option></select>
+        <button class="btn sm teal" id="rndRule">Random rule</button>
+        <div class="lab">Birth</div><div class="counts" id="bC"></div>
+        <div class="lab">Survive</div><div class="counts" id="sC"></div>
+      </div>
+      <div class="card"><h2>Grid size</h2>
+        <div class="seg" id="sizes"><button class="btn" data-n="16">16</button><button class="btn on" data-n="24">24</button><button class="btn" data-n="32">32</button><button class="btn" data-n="48">48</button><button class="btn" data-n="64">64</button></div>
+        <button class="btn sm" id="bench" style="margin-top:12px">Benchmark sizes</button>
+      </div>
+      <div class="card"><h2>Random-rule survey</h2>
+        <div class="row" style="margin:0">
+          <div class="field"><label>Rules</label><input class="w" type="number" id="sR" value="60"></div>
+          <div class="field"><label>Trials</label><input class="w" type="number" id="sT" value="3"></div>
+          <div class="field"><label>3D side</label><input class="w" type="number" id="sN" value="12"></div>
+          <div class="field"><label>Steps</label><input class="w" type="number" id="sS" value="80"></div>
+          <div class="field"><label>Count chance</label><input class="w" type="number" id="sP" value="0.3" step="0.05"></div>
+          <div class="field"><label>Seed</label><input class="w" type="number" id="sD" value="2026"></div>
+        </div>
+        <button class="btn sm primary" id="survey" style="margin-top:12px">Run 2D vs 3D survey</button>
+      </div>
+    </div>
+  </div>
+  <div class="board-panel" style="margin-top:18px;overflow-x:auto"><div class="mono" id="out">Run the benchmark or the survey to see results here.</div><div id="found"></div></div>
+  <footer>The survey uses a 2D grid with about the same number of cells as the 3D one, so the comparison is fair. Same seed and settings give the same results.</footer>
+</div>
+<script>
+(()=>{
+const $=id=>document.getElementById(id),cv=$('board'),ctx=cv.getContext('2d');
+const fmtSet=s=>{const a=[...s].sort((x,y)=>x-y),o=[];for(let i=0;i<a.length;){let j=i;while(j+1<a.length&&a[j+1]===a[j]+1)j++;o.push(j>i?a[i]+'-'+a[j]:''+a[i]);i=j+1}return o.join(',')};
+const parseSet=t=>{const s=new Set();for(const p of t.split(',').filter(Boolean)){const m=/^(\d+)(?:-(\d+))?$/.exec(p);if(!m)return null;const a=+m[1],b=m[2]===undefined?a:+m[2];if(a>26||b>26)return null;for(let k=a;k<=b;k++)s.add(k)}return s};
+const parse=str=>{const m=/^B([\d,\-]*)\/S([\d,\-]*)$/i.exec(str.trim());if(!m)return null;const B=parseSet(m[1]),S=parseSet(m[2]);return B&&S?{B,S}:null};
+const fmt=(B,S)=>'B'+fmtSet(B)+'/S'+fmtSet(S),tab=s=>{const t=new Uint8Array(27);s.forEach(k=>t[k]=1);return t};
+const bufs={};const buf=N=>bufs[N]||(bufs[N]=[new Uint8Array(N*N*N),new Uint8Array(N*N*N)]);
+function step3(g,N,b,s){
+  const N2=N*N,n=new Uint8Array(N2*N),[t1,t2]=buf(N);
+  for(let z=0;z<N;z++)for(let y=0;y<N;y++){const o=z*N2+y*N;for(let x=0;x<N;x++)t1[o+x]=g[o+(x?x-1:N-1)]+g[o+x]+g[o+(x<N-1?x+1:0)]}
+  for(let z=0;z<N;z++){const o=z*N2;for(let y=0;y<N;y++){const u=o+(y?y-1:N-1)*N,m=o+y*N,d=o+(y<N-1?y+1:0)*N;for(let x=0;x<N;x++)t2[m+x]=t1[u+x]+t1[m+x]+t1[d+x]}}
+  for(let z=0;z<N;z++){const u=(z?z-1:N-1)*N2,m=z*N2,d=(z<N-1?z+1:0)*N2;for(let i=0;i<N2;i++){const k=t2[u+i]+t2[m+i]+t2[d+i]-g[m+i];n[m+i]=g[m+i]?s[k]:b[k]}}
+  return n}
+const count=g=>{let p=0;for(let i=0;i<g.length;i++)p+=g[i];return p};
+let N=24,g=new Uint8Array(N**3),B=new Set([6]),S=new Set([5,6,7]),bT=tab(B),sT=tab(S),running=false,gen=0,last=0,fps=8,ax=.5,ay=.6,dirty=true,drag=false,lx=0,ly=0,W=600,H=480,col={},cols=[],msStep=0;
+function fill(){const f=$('reg').value/100,d=$('dens').value/100,lo=Math.floor(N*(1-f)/2),hi=Math.ceil(N*(1+f)/2);g=new Uint8Array(N**3);
+  for(let z=lo;z<hi;z++)for(let y=lo;y<hi;y++)for(let x=lo;x<hi;x++)g[z*N*N+y*N+x]=Math.random()<d?1:0;gen=0;dirty=true;info()}
+function info(){const p=count(g);$('stat').textContent=`gen ${gen} · ${p} cells · ${(p/N**3*100).toFixed(1)}% · ${msStep.toFixed(1)} ms/step`}
+function step(){const t=performance.now();g=step3(g,N,bT,sT);msStep=performance.now()-t;gen++;dirty=true;info()}
+const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+function colors(){col={bg:CA.css('--canvas'),line:CA.css('--line')};const far=[143,193,196],mid=[237,165,198],near=rgb(CA.css('--live')),K=28;
+  cols=Array.from({length:K},(_,b)=>{const t=b/(K-1),[a,c,u]=t<.5?[far,mid,t*2]:[mid,near,(t-.5)*2];return`rgb(${a.map((v,i)=>Math.round(v+(c[i]-v)*u))})`});dirty=true}
+function resize(){W=Math.min(cv.parentElement.clientWidth-34,760);H=Math.round(W*.8);const d=devicePixelRatio||1;cv.style.width=W+'px';cv.style.height=H+'px';cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0);dirty=true}
+function draw(){
+  ctx.fillStyle=col.bg;ctx.fillRect(0,0,W,H);
+  const sa=Math.sin(ay),ca=Math.cos(ay),sx=Math.sin(ax),cx=Math.cos(ax),sc=Math.min(W,H)/(N*1.7),c=(N-1)/2,D=3*N,mx=W/2,my=H/2,K=cols.length;
+  const P=(X,Y,Z)=>{const x1=X*ca+Z*sa,z1=-X*sa+Z*ca,y1=Y*cx-z1*sx,z2=Y*sx+z1*cx,f=1/(1-z2/D);return[mx+x1*sc*f,my+y1*sc*f,z2,f]};
+  const h=N/2,V=[];for(let i=0;i<8;i++)V.push(P(i&1?h:-h,i&2?h:-h,i&4?h:-h));
+  ctx.strokeStyle=col.line;ctx.lineWidth=1.5;ctx.beginPath();
+  for(let i=0;i<8;i++)for(const b of[1,2,4])if(!(i&b)){ctx.moveTo(V[i][0],V[i][1]);ctx.lineTo(V[i|b][0],V[i|b][1])}ctx.stroke();
+  const L=Array.from({length:K},()=>[]);
+  for(let z=0,i=0;z<N;z++)for(let y=0;y<N;y++)for(let x=0;x<N;x++,i++)if(g[i]){
+    const X=x-c,Y=y-c,Z=z-c,x1=X*ca+Z*sa,z1=-X*sa+Z*ca,y1=Y*cx-z1*sx,z2=Y*sx+z1*cx,f=1/(1-z2/D);
+    const b=Math.min(K-1,Math.max(0,((z2/(N*.9)+1)*K/2)|0));L[b].push(mx+x1*sc*f,my+y1*sc*f,sc*f)}
+  for(let b=0;b<K;b++){ctx.fillStyle=cols[b];const l=L[b];for(let j=0;j<l.length;j+=3){const s=l[j+2]*.92;ctx.fillRect(l[j]-s/2,l[j+1]-s/2,s,s)}}}
+function frame(t){
+  if(running&&t-last>=1000/fps){last=t;step()}
+  if($('auto').checked&&!drag){ay+=.005;dirty=true}
+  if(dirty){dirty=false;draw()}requestAnimationFrame(frame)}
+cv.addEventListener('pointerdown',e=>{drag=true;lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId)});
+cv.addEventListener('pointermove',e=>{if(!drag)return;ay+=(e.clientX-lx)*.01;ax=Math.max(-1.5,Math.min(1.5,ax+(e.clientY-ly)*.01));lx=e.clientX;ly=e.clientY;dirty=true});
+addEventListener('pointerup',()=>drag=false);
+// rule editor
+const bt={b:[],s:[]};
+function build(el,k,set){for(let n=0;n<=26;n++){const b=document.createElement('button');b.className='cb';b.textContent=n;b.style.cssText='width:26px;height:26px;font-size:11px';
+  b.onclick=()=>{set().has(n)?set().delete(n):set().add(n);sync()};el.appendChild(b);bt[k].push(b)}}
+function sync(){bT=tab(B);sT=tab(S);bt.b.forEach((b,n)=>b.classList.toggle('b',B.has(n)));bt.s.forEach((b,n)=>b.classList.toggle('s',S.has(n)));
+  const r=fmt(B,S);$('ruleText').textContent=r;$('ruleIn').value=r;$('pre').value=[...$('pre').options].some(o=>o.value===r)?r:$('pre').value}
+function setRule(str){const r=parse(str);if(!r)return false;B=r.B;S=r.S;sync();return true}
+build($('bC'),'b',()=>B);build($('sC'),'s',()=>S);
+$('ruleIn').onchange=e=>{if(!setRule(e.target.value))e.target.value=fmt(B,S)};
+$('pre').onchange=e=>setRule(e.target.value);
+$('rndRule').onclick=()=>{const r=p=>{const s=new Set();for(let n=0;n<=26;n++)if(Math.random()<p)s.add(n);return s};B=r(.2);S=r(.3);sync();fill()};
+// controls
+$('playBtn').onclick=()=>{running=!running;$('playBtn').textContent=running?'Pause':'Run'};
+$('stepBtn').onclick=()=>{if(!running)step()};
+$('clearBtn').onclick=()=>{g=new Uint8Array(N**3);gen=0;dirty=true;info()};
+$('randBtn').onclick=fill;
+$('speed').oninput=e=>{fps=+e.target.value;$('speedL').textContent=fps+' fps'};
+$('dens').oninput=e=>$('densL').textContent=e.target.value+'%';
+$('reg').oninput=e=>$('regL').textContent=e.target.value+'%';
+document.querySelectorAll('#sizes .btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('#sizes .btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');N=+b.dataset.n;fill()});
+addEventListener('keydown',e=>{if(['SELECT','INPUT'].includes(e.target.tagName))return;if(e.code==='Space'){e.preventDefault();$('playBtn').click()}if(e.key==='s')$('stepBtn').click()});
+// benchmark: time per step by grid size
+$('bench').onclick=async()=>{
+  const o=$('out');o.innerHTML='Benchmarking…';const rows=[];
+  for(const n of[16,24,32,48,64,96,128]){await new Promise(r=>setTimeout(r,20));
+    let a=Uint8Array.from({length:n**3},()=>Math.random()<.25?1:0);const t=performance.now();
+    for(let i=0;i<3;i++)a=step3(a,n,bT,sT);rows.push([n,n**3,(performance.now()-t)/3])}
+  o.innerHTML='<table><thead><tr><th>Side</th><th>Cells</th><th>ms per step</th><th>Steps/sec</th></tr></thead><tbody>'+rows.map(r=>`<tr><td>${r[0]}³</td><td>${r[1].toLocaleString()}</td><td>${r[2].toFixed(1)}</td><td>${(1000/r[2]).toFixed(1)}</td></tr>`).join('')+'</tbody></table><p class="note">Simulation only. Drawing every live cell each frame is usually the first limit, so large grids look best with a sparse rule.</p>'};
+// survey: 2D vs 3D random rules
+const hash=a=>{let h=2166136261;for(let i=0;i<a.length;i++)h=Math.imul(h^a[i],16777619);return h>>>0};
+function trial(f,len,steps,d,rnd){let a=Uint8Array.from({length:len},()=>rnd()<d?1:0);const seen=new Set();
+  for(let t=0;t<steps;t++){const h=hash(a);if(seen.has(h))return{c:hash(f(a))===h?'still':'oscillating',d:count(a)/len};seen.add(h);a=f(a);if(!count(a))return{c:'extinct',d:0}}
+  const d2=count(a)/len;return{c:d2>.5?'dense':'active',d:d2}}
+$('survey').onclick=async()=>{
+  const R=+$('sR').value,T=+$('sT').value,n3=+$('sN').value,steps=+$('sS').value,p=+$('sP').value,rnd=CA.prng(+$('sD').value),n2=Math.round(n3**1.5);
+  const C=['extinct','still','oscillating','active','dense'],tot={2:{},3:{}},dsum={2:0,3:0},num={2:0,3:0},found=[];$('survey').disabled=true;
+  for(let r=0;r<R;r++){
+    const pick=m=>{const s=new Set();for(let n=0;n<=m;n++)if(rnd()<p)s.add(n);return s};
+    const rules={2:{B:pick(8),S:pick(8)},3:{B:pick(26),S:pick(26)}};
+    for(const dim of[2,3]){const{B:b,S:s}=rules[dim],bt=tab(b),st=tab(s);let inter=0,dn=0;
+      const f=dim===2?a=>CA.step(a,n2,n2,b,s):a=>step3(a,n3,bt,st),len=dim===2?n2*n2:n3**3;
+      for(let t=0;t<T;t++){const x=trial(f,len,steps,.1+rnd()*.3,rnd);tot[dim][x.c]=(tot[dim][x.c]||0)+1;dsum[dim]+=x.d;num[dim]++;
+        if((x.c==='active'||x.c==='oscillating')&&x.d>.02&&x.d<.4){inter++;dn+=x.d}}
+      if(dim===3&&inter>=Math.ceil(T/2)&&found.length<16)found.push(fmt(b,s));
+      await new Promise(r=>setTimeout(r,0))}
+    $('out').textContent=`${r+1} / ${R} rules`}
+  const pc=(d,c)=>((tot[d][c]||0)/num[d]*100).toFixed(1)+'%';
+  $('out').innerHTML=`<table><thead><tr><th>Behavior</th><th>2D (${n2}×${n2})</th><th>3D (${n3}³)</th></tr></thead><tbody>`+C.map(c=>`<tr><td>${c}</td><td>${pc(2,c)}</td><td>${pc(3,c)}</td></tr>`).join('')+`<tr><td>mean final density</td><td>${(dsum[2]/num[2]).toFixed(3)}</td><td>${(dsum[3]/num[3]).toFixed(3)}</td></tr></tbody></table><p class="note">${R*T} trials per dimension. Still means the grid stopped changing; oscillating means a full-grid repeat; active means no repeat within ${steps} steps; dense means active with over 50% of cells alive.</p>`;
+  $('found').innerHTML=found.length?'<div class="lab">3D rules that stayed active at moderate density (click to load)</div>'+found.map(r=>`<button class="btn sm" data-r="${r}">${r}</button>`).join(''):'';
+  $('found').querySelectorAll('button').forEach(b=>b.onclick=()=>{setRule(b.dataset.r);fill();window.scrollTo({top:0,behavior:'smooth'})});
+  $('survey').disabled=false};
+addEventListener('themechange',colors);addEventListener('resize',resize);
+colors();resize();sync();fill();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

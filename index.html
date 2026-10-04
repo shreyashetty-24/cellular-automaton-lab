@@ -2,444 +2,138 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cellular Automaton Lab</title>
-<style>
-  :root{
-    --bg:#0d1210;
-    --panel:#141b18;
-    --line:#26332d;
-    --ink:#e8ede9;
-    --dim:#8fa398;
-    --live:#5ee6a0;
-    --live-dim:#2a6b4f;
-    --accent:#e6b85e;
-    --danger:#e6725e;
-    --mono:'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
-    --sans:'Inter', -apple-system, sans-serif;
-  }
-  *{box-sizing:border-box;}
-  html,body{
-    margin:0;padding:0;background:var(--bg);color:var(--ink);
-    font-family:var(--sans);
-    -webkit-font-smoothing:antialiased;
-  }
-  a{color:var(--live);}
-  .wrap{
-    max-width:1180px;margin:0 auto;padding:28px 20px 60px;
-  }
-  header{
-    display:flex;justify-content:space-between;align-items:flex-end;
-    gap:20px;margin-bottom:22px;flex-wrap:wrap;
-    border-bottom:1px solid var(--line);padding-bottom:18px;
-  }
-  h1{
-    font-size:22px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em;
-  }
-  header p{margin:0;color:var(--dim);font-size:13.5px;max-width:520px;line-height:1.5;}
-  .rule-readout{
-    font-family:var(--mono);font-size:22px;color:var(--live);
-    text-align:right;white-space:nowrap;
-  }
-  .rule-readout span{color:var(--dim);font-size:12px;display:block;font-family:var(--sans);margin-bottom:2px;}
-
-  .layout{
-    display:grid;grid-template-columns:1fr 320px;gap:20px;
-  }
-  @media (max-width:880px){ .layout{grid-template-columns:1fr;} }
-
-  .board-panel{
-    background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    padding:14px;
-  }
-  #board{
-    width:100%;aspect-ratio:1.4/1;display:block;background:#0a0e0c;
-    border-radius:6px;cursor:crosshair;touch-action:none;
-  }
-  .board-controls{
-    display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;
-  }
-  button{
-    font-family:var(--sans);font-size:13px;font-weight:500;
-    background:#1b2420;color:var(--ink);border:1px solid var(--line);
-    padding:8px 14px;border-radius:6px;cursor:pointer;transition:background .12s;
-  }
-  button:hover{background:#232f29;}
-  button:focus-visible{outline:2px solid var(--live);outline-offset:1px;}
-  button.primary{background:var(--live-dim);border-color:var(--live);color:#eafff2;}
-  button.primary:hover{background:#337a5c;}
-  button.ghost{background:transparent;}
-  .spacer{flex:1;}
-  .speed-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim);}
-  input[type=range]{accent-color:var(--live);width:110px;}
-  .gen-count{font-family:var(--mono);font-size:12.5px;color:var(--dim);}
-
-  .side{display:flex;flex-direction:column;gap:16px;}
-  .card{
-    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;
-  }
-  .card h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:0 0 12px;font-weight:600;}
-
-  .rule-grid{display:flex;flex-direction:column;gap:14px;}
-  .rule-row{display:flex;flex-direction:column;gap:6px;}
-  .rule-row .label{font-size:12.5px;color:var(--dim);flex-shrink:0;}
-  .counts{display:flex;flex-wrap:wrap;gap:5px;}
-  .count-btn{
-    width:24px;height:24px;border-radius:5px;border:1px solid var(--line);
-    background:#0f1512;color:var(--dim);font-family:var(--mono);font-size:11.5px;
-    cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;
-  }
-  .count-btn.on-birth{background:var(--live);border-color:var(--live);color:#0a1a12;font-weight:700;}
-  .count-btn.on-survive{background:var(--accent);border-color:var(--accent);color:#241a05;font-weight:700;}
-  .count-btn:hover{border-color:var(--dim);}
-
-  select{
-    width:100%;background:#0f1512;color:var(--ink);border:1px solid var(--line);
-    padding:8px 10px;border-radius:6px;font-family:var(--sans);font-size:13px;margin-top:4px;
-  }
-
-  .fill-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
-  .fill-row label{font-size:12.5px;color:var(--dim);white-space:nowrap;}
-
-  .grid-size-row{display:flex;gap:8px;margin-top:10px;}
-  .grid-size-row button{flex:1;font-size:12px;padding:7px;}
-  .grid-size-row button.active{background:var(--live-dim);border-color:var(--live);}
-
-  footer{margin-top:24px;color:var(--dim);font-size:12px;text-align:center;}
-  .kbd{font-family:var(--mono);background:#1b2420;padding:1px 6px;border-radius:4px;border:1px solid var(--line);}
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Fredoka:wght@500;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="shared.js"></script>
 </head>
 <body>
+<div class="top">Grow something from simple rules</div>
+<div class="brand"><h1 class="rainbow">Cellular Automaton Lab</h1><p class="script">draw it, run it, break it</p></div>
+<nav><a class="on" href="index.html">Simulator</a><a href="sampler.html">Rule sampler</a><a href="noise.html">Noise sweep</a><a href="3d.html">3D</a><button id="themeBtn">Dark mode</button></nav>
 <div class="wrap">
-
-  <header>
-    <div>
-      <h1>Cellular Automaton Lab</h1>
-      <p>Draw a starting pattern or fill randomly, then run the simulation. Toggle neighbor counts on the right to change which rule governs birth and survival.</p>
-    </div>
-    <div style="text-align:right;">
-      <div class="rule-readout"><span>current rule</span><span id="ruleText">B3/S23</span></div>
-      <a href="sampler.html" style="font-size:12px;color:var(--dim);text-decoration:none;border:1px solid var(--line);padding:5px 10px;border-radius:6px;display:inline-block;margin-top:8px;">rule sampler →</a>
-    </div>
-  </header>
-
+  <p class="intro">Draw a pattern or fill randomly, then run it. Toggle neighbor counts to change which rule governs birth and survival. Edges wrap around (the grid is a torus).</p>
+  <div class="rule-readout"><span class="lbl">current rule</span><span id="ruleText">B3/S23</span></div>
   <div class="layout">
     <div class="board-panel">
       <canvas id="board"></canvas>
-      <div class="board-controls">
-        <button class="primary" id="playBtn">▶ Run</button>
-        <button id="stepBtn">Step</button>
-        <button id="clearBtn">Clear</button>
-        <button id="randomBtn">Random fill</button>
-        <div class="spacer"></div>
-        <span class="gen-count" id="genCount">gen 0</span>
+      <div class="row">
+        <button class="btn primary" id="playBtn">Run</button>
+        <button class="btn" id="stepBtn">Step</button>
+        <button class="btn" id="clearBtn">Clear</button>
+        <button class="btn teal" id="randomBtn">Random fill</button>
+        <span class="sp"></span><span class="mono" id="genCount">gen 0</span>
       </div>
-      <div class="board-controls">
-        <div class="speed-row">
-          <span>Speed</span>
-          <input type="range" id="speed" min="1" max="60" value="12">
-          <span id="speedLabel">12 fps</span>
-        </div>
-        <div class="spacer"></div>
-        <div class="speed-row">
-          <span>Density</span>
-          <input type="range" id="density" min="5" max="60" value="30">
-          <span id="densityLabel">30%</span>
-        </div>
+      <div class="row">
+        Speed <input type="range" id="speed" min="1" max="60" value="12"><span id="speedLabel">12 fps</span>
+        <span class="sp"></span>
+        Density <input type="range" id="density" min="5" max="60" value="30"><span id="densityLabel">30%</span>
       </div>
     </div>
-
     <div class="side">
-      <div class="card">
-        <h2>Presets</h2>
+      <div class="card"><h2>Presets</h2>
         <select id="presetSelect">
-          <option value="B3/S23">Conway's Life — B3/S23</option>
-          <option value="B36/S23">HighLife — B36/S23</option>
-          <option value="B2/S">Seeds — B2/S</option>
-          <option value="B3678/S34678">Day & Night — B3678/S34678</option>
-          <option value="B1/S12345">Replicator — B1/S12345</option>
-          <option value="B3/S1234">Maze — B3/S1234</option>
-          <option value="B368/S245">Morley — B368/S245</option>
-          <option value="B2/S">Life without Death — B2/S</option>
-          <option value="custom">Custom (see toggles below)</option>
+          <option value="B3/S23">Conway's Life: B3/S23</option>
+          <option value="B36/S23">HighLife: B36/S23</option>
+          <option value="B2/S">Seeds: B2/S</option>
+          <option value="B3678/S34678">Day &amp; Night: B3678/S34678</option>
+          <option value="B1357/S1357">Replicator: B1357/S1357</option>
+          <option value="B3/S12345">Maze: B3/S12345</option>
+          <option value="B3/S1234">Mazectric: B3/S1234</option>
+          <option value="B368/S245">Morley: B368/S245</option>
+          <option value="B3/S012345678">Life without Death: B3/S012345678</option>
+          <option value="custom">Custom (use the toggles)</option>
         </select>
+        <div class="lab">From your sampler run</div>
+        <select id="sampleSelect"></select>
       </div>
-
-      <div class="card">
-        <h2>Rule editor</h2>
-        <div class="rule-grid">
-          <div class="rule-row">
-            <span class="label">Birth</span>
-            <div class="counts" id="birthCounts"></div>
-          </div>
-          <div class="rule-row">
-            <span class="label">Survive</span>
-            <div class="counts" id="surviveCounts"></div>
-          </div>
-        </div>
-        <p style="font-size:11.5px;color:var(--dim);margin:12px 0 0;line-height:1.5;">
-          Click a number to toggle it. <span style="color:var(--live)">Green</span> = that many live neighbors causes birth in a dead cell. <span style="color:var(--accent)">Gold</span> = that many live neighbors keeps a live cell alive.
-        </p>
+      <div class="card"><h2>Rule editor</h2>
+        <div class="lab" style="margin-top:0">Birth</div><div class="counts" id="birthCounts"></div>
+        <div class="lab">Survive</div><div class="counts" id="surviveCounts"></div>
+        <p class="note"><b style="color:var(--teal)">Teal</b>: a dead cell with that many live neighbors is born. <b style="color:var(--yellow)">Gold</b>: a live cell with that many live neighbors survives.</p>
       </div>
-
-      <div class="card">
-        <h2>Noise</h2>
-        <div class="speed-row" style="margin-bottom:6px;">
-          <span>Flip probability</span>
-          <input type="range" id="noise" min="0" max="500" value="0">
-          <span id="noiseLabel">0.00%</span>
-        </div>
-        <p style="font-size:11.5px;color:var(--dim);margin:6px 0 0;line-height:1.5;">
-          Each step, every cell independently flips state with this probability (0–2% typical). Use it to test whether patterns are robust or fragile.
-        </p>
+      <div class="card"><h2>Noise</h2>
+        <div class="row" style="margin-top:0">Flip chance <input type="range" id="noise" min="0" max="500" value="0"><span id="noiseLabel">0.00%</span></div>
+        <p class="note">Each step, every cell flips with this probability. Use it to test whether patterns are robust or fragile.</p>
       </div>
-
-      <div class="card">
-        <h2>Grid resolution</h2>
-        <div class="grid-size-row">
-          <button data-size="40">40×28</button>
-          <button data-size="70" class="active">70×50</button>
-          <button data-size="110">110×78</button>
-        </div>
+      <div class="card"><h2>Grid size</h2>
+        <div class="seg" id="sizes"><button class="btn" data-c="40" data-r="28">40×28</button><button class="btn on" data-c="70" data-r="50">70×50</button><button class="btn" data-c="110" data-r="78">110×78</button></div>
       </div>
     </div>
   </div>
-
-  <footer>Click / drag on the grid to draw. <span class="kbd">Space</span> play/pause · <span class="kbd">S</span> step · <span class="kbd">C</span> clear</footer>
+  <footer>Click or drag to draw · <span class="kbd">Space</span> run/pause · <span class="kbd">S</span> step · <span class="kbd">C</span> clear</footer>
 </div>
-
 <script>
-(function(){
-  const canvas = document.getElementById('board');
-  const ctx = canvas.getContext('2d');
-  let cols = 70, rows = 50;
-  let cell;
-  let grid = makeGrid(cols, rows);
-  let running = false;
-  let gen = 0;
-  let lastTime = 0;
-  let fps = 12;
-  let rafId = null;
-  let painting = false;
-  let paintValue = 1;
-
-  let birthSet = new Set([3]);
-  let surviveSet = new Set([2,3]);
-  let noiseP = 0; // probability [0,1] a cell flips each step
-
-  function makeGrid(c,r){
-    return new Uint8Array(c*r);
-  }
-  function idx(x,y){ return y*cols+x; }
-
-  function resizeCanvas(){
-    const rect = canvas.parentElement.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const cssW = rect.width - 28; // padding
-    const cssH = cssW / 1.4;
-    canvas.style.width = cssW+'px';
-    canvas.style.height = cssH+'px';
-    canvas.width = Math.floor(cssW*dpr);
-    canvas.height = Math.floor(cssH*dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    cell = cssW/cols;
-    draw();
-  }
-
-  function draw(){
-    const w = canvas.width/(window.devicePixelRatio||1);
-    const h = canvas.height/(window.devicePixelRatio||1);
-    ctx.fillStyle = '#0a0e0c';
-    ctx.fillRect(0,0,w,h);
-    ctx.fillStyle = '#5ee6a0';
-    for(let y=0;y<rows;y++){
-      for(let x=0;x<cols;x++){
-        if(grid[idx(x,y)]){
-          ctx.fillRect(x*cell, y*cell, Math.ceil(cell)-0.5, Math.ceil(cell)-0.5);
-        }
-      }
-    }
-    // faint grid lines when cells are big
-    if(cell > 8){
-      ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for(let x=0;x<=cols;x++){ ctx.moveTo(x*cell,0); ctx.lineTo(x*cell,h); }
-      for(let y=0;y<=rows;y++){ ctx.moveTo(0,y*cell); ctx.lineTo(w,y*cell); }
-      ctx.stroke();
-    }
-  }
-
-  function countNeighbors(g,x,y){
-    let n=0;
-    for(let dy=-1;dy<=1;dy++){
-      for(let dx=-1;dx<=1;dx++){
-        if(dx===0&&dy===0) continue;
-        const nx=(x+dx+cols)%cols, ny=(y+dy+rows)%rows;
-        n += g[idx(nx,ny)];
-      }
-    }
-    return n;
-  }
-
-  function step(){
-    const next = makeGrid(cols,rows);
-    for(let y=0;y<rows;y++){
-      for(let x=0;x<cols;x++){
-        const alive = grid[idx(x,y)];
-        const n = countNeighbors(grid,x,y);
-        if(alive){
-          next[idx(x,y)] = surviveSet.has(n) ? 1 : 0;
-        } else {
-          next[idx(x,y)] = birthSet.has(n) ? 1 : 0;
-        }
-      }
-    }
-    if(noiseP > 0){
-      for(let i=0;i<next.length;i++){
-        if(Math.random() < noiseP) next[i] = next[i] ? 0 : 1;
-      }
-    }
-    grid = next;
-    gen++;
-    document.getElementById('genCount').textContent = 'gen '+gen;
-    draw();
-  }
-
-  function loop(t){
-    if(!running) return;
-    if(t - lastTime >= 1000/fps){
-      lastTime = t;
-      step();
-    }
-    rafId = requestAnimationFrame(loop);
-  }
-
-  function setRunning(v){
-    running = v;
-    document.getElementById('playBtn').textContent = running ? '⏸ Pause' : '▶ Run';
-    if(running){ rafId = requestAnimationFrame(loop); }
-    else if(rafId){ cancelAnimationFrame(rafId); }
-  }
-
-  // --- painting ---
-  function canvasToCell(clientX, clientY){
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((clientX-rect.left)/cell);
-    const y = Math.floor((clientY-rect.top)/cell);
-    return [x,y];
-  }
-  function paintAt(clientX, clientY){
-    const [x,y] = canvasToCell(clientX, clientY);
-    if(x<0||y<0||x>=cols||y>=rows) return;
-    grid[idx(x,y)] = paintValue;
-    draw();
-  }
-  canvas.addEventListener('pointerdown', e=>{
-    painting = true;
-    const [x,y] = canvasToCell(e.clientX, e.clientY);
-    if(x>=0&&y>=0&&x<cols&&y<rows){
-      paintValue = grid[idx(x,y)] ? 0 : 1;
-      paintAt(e.clientX,e.clientY);
-    }
-    canvas.setPointerCapture(e.pointerId);
-  });
-  canvas.addEventListener('pointermove', e=>{ if(painting) paintAt(e.clientX,e.clientY); });
-  window.addEventListener('pointerup', ()=>{ painting=false; });
-
-  // --- controls ---
-  document.getElementById('playBtn').addEventListener('click', ()=> setRunning(!running));
-  document.getElementById('stepBtn').addEventListener('click', ()=>{ if(!running) step(); });
-  document.getElementById('clearBtn').addEventListener('click', ()=>{
-    grid = makeGrid(cols,rows); gen=0;
-    document.getElementById('genCount').textContent='gen 0';
-    draw();
-  });
-  document.getElementById('randomBtn').addEventListener('click', ()=>{
-    const density = document.getElementById('density').value/100;
-    for(let i=0;i<grid.length;i++){ grid[i] = Math.random()<density ? 1:0; }
-    gen=0; document.getElementById('genCount').textContent='gen 0';
-    draw();
-  });
-  document.getElementById('speed').addEventListener('input', e=>{
-    fps = +e.target.value;
-    document.getElementById('speedLabel').textContent = fps+' fps';
-  });
-  document.getElementById('density').addEventListener('input', e=>{
-    document.getElementById('densityLabel').textContent = e.target.value+'%';
-  });
-  document.getElementById('noise').addEventListener('input', e=>{
-    const pct = (+e.target.value)/100; // 0-5.00
-    noiseP = pct/100;
-    document.getElementById('noiseLabel').textContent = pct.toFixed(2)+'%';
-  });
-
-  document.querySelectorAll('.grid-size-row button').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.grid-size-row button').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      const s = +btn.dataset.size;
-      cols = s; rows = Math.round(s*50/70);
-      grid = makeGrid(cols,rows); gen=0;
-      document.getElementById('genCount').textContent='gen 0';
-      resizeCanvas();
-    });
-  });
-
-  window.addEventListener('keydown', e=>{
-    if(e.target.tagName==='SELECT') return;
-    if(e.code==='Space'){ e.preventDefault(); setRunning(!running); }
-    if(e.key==='s'||e.key==='S'){ if(!running) step(); }
-    if(e.key==='c'||e.key==='C'){ grid=makeGrid(cols,rows); gen=0; document.getElementById('genCount').textContent='gen 0'; draw(); }
-  });
-
-  // --- rule editor ---
-  const birthDiv = document.getElementById('birthCounts');
-  const surviveDiv = document.getElementById('surviveCounts');
-  function buildCountButtons(container, set, cls){
-    container.innerHTML='';
-    container.style.display='flex';
-    container.style.gap='5px';
-    for(let n=0;n<=8;n++){
-      const b = document.createElement('button');
-      b.className='count-btn'+(set.has(n)?(' '+cls):'');
-      b.textContent=n;
-      b.addEventListener('click', ()=>{
-        if(set.has(n)) set.delete(n); else set.add(n);
-        buildCountButtons(container,set,cls);
-        syncRuleText();
-        document.getElementById('presetSelect').value='custom';
-      });
-      container.appendChild(b);
-    }
-  }
-  function ruleString(){
-    const b = [...birthSet].sort().join('');
-    const s = [...surviveSet].sort().join('');
-    return 'B'+b+'/S'+s;
-  }
-  function syncRuleText(){
-    document.getElementById('ruleText').textContent = ruleString();
-  }
-  function applyRuleString(str){
-    const m = str.match(/^B(\d*)\/S(\d*)$/);
-    if(!m) return;
-    birthSet = new Set(m[1].split('').filter(Boolean).map(Number));
-    surviveSet = new Set(m[2].split('').filter(Boolean).map(Number));
-    buildCountButtons(birthDiv, birthSet, 'on-birth');
-    buildCountButtons(surviveDiv, surviveSet, 'on-survive');
-    syncRuleText();
-  }
-  document.getElementById('presetSelect').addEventListener('change', e=>{
-    if(e.target.value!=='custom') applyRuleString(e.target.value);
-  });
-
-  applyRuleString('B3/S23');
-  buildCountButtons(birthDiv, birthSet, 'on-birth');
-  buildCountButtons(surviveDiv, surviveSet, 'on-survive');
-
-  window.addEventListener('resize', resizeCanvas);
-  resizeCanvas();
+(()=>{
+const $=id=>document.getElementById(id),cv=$('board'),ctx=cv.getContext('2d');
+let cols=70,rows=50,cell,W,H,grid=new Uint8Array(cols*rows),running=false,gen=0,last=0,fps=12,raf,painting=false,pv=1,B=new Set([3]),S=new Set([2,3]),noise=0,col={};
+const idx=(x,y)=>y*cols+x,gc=()=>$('genCount').textContent='gen '+gen;
+function colors(){col={live:CA.css('--live'),bg:CA.css('--canvas'),grid:CA.css('--grid')}}
+function resize(){const d=devicePixelRatio||1;W=cv.parentElement.clientWidth-34;cell=W/cols;H=cell*rows;
+  cv.style.width=W+'px';cv.style.height=H+'px';cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0);draw()}
+function draw(){
+  ctx.fillStyle=col.bg;ctx.fillRect(0,0,W,H);ctx.fillStyle=col.live;
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++)if(grid[idx(x,y)])ctx.fillRect(x*cell,y*cell,cell-(cell>6?1:0),cell-(cell>6?1:0));
+  if(cell>8){ctx.strokeStyle=col.grid;ctx.beginPath();
+    for(let x=0;x<=cols;x++){ctx.moveTo(x*cell,0);ctx.lineTo(x*cell,H)}
+    for(let y=0;y<=rows;y++){ctx.moveTo(0,y*cell);ctx.lineTo(W,y*cell)}
+    ctx.stroke()}}
+function step(){
+  const n=CA.step(grid,cols,rows,B,S);
+  if(noise>0)for(let i=0;i<n.length;i++)if(Math.random()<noise)n[i]^=1;
+  grid=n;gen++;gc();draw()}
+function loop(t){if(!running)return;if(t-last>=1000/fps){last=t;step()}raf=requestAnimationFrame(loop)}
+function run(v){running=v;$('playBtn').textContent=v?'Pause':'Run';if(v)raf=requestAnimationFrame(loop);else cancelAnimationFrame(raf)}
+function reset(g){grid=g||new Uint8Array(cols*rows);gen=0;gc();draw()}
+// painting
+const at=e=>{const r=cv.getBoundingClientRect();return[Math.floor((e.clientX-r.left)/cell),Math.floor((e.clientY-r.top)/cell)]};
+function paint(e){const[x,y]=at(e);if(x<0||y<0||x>=cols||y>=rows)return;grid[idx(x,y)]=pv;draw()}
+cv.addEventListener('pointerdown',e=>{painting=true;const[x,y]=at(e);if(x>=0&&y>=0&&x<cols&&y<rows)pv=grid[idx(x,y)]?0:1;paint(e);cv.setPointerCapture(e.pointerId)});
+cv.addEventListener('pointermove',e=>{if(painting)paint(e)});
+addEventListener('pointerup',()=>painting=false);
+// controls
+$('playBtn').onclick=()=>run(!running);
+$('stepBtn').onclick=()=>{if(!running)step()};
+$('clearBtn').onclick=()=>reset();
+$('randomBtn').onclick=()=>{const d=$('density').value/100;reset(Uint8Array.from({length:cols*rows},()=>Math.random()<d?1:0))};
+$('speed').oninput=e=>{fps=+e.target.value;$('speedLabel').textContent=fps+' fps'};
+$('density').oninput=e=>$('densityLabel').textContent=e.target.value+'%';
+$('noise').oninput=e=>{const p=e.target.value/100;noise=p/100;$('noiseLabel').textContent=p.toFixed(2)+'%'};
+document.querySelectorAll('#sizes .btn').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#sizes .btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  cols=+b.dataset.c;rows=+b.dataset.r;reset();resize()});
+addEventListener('keydown',e=>{
+  if(['SELECT','INPUT'].includes(e.target.tagName))return;
+  if(e.code==='Space'){e.preventDefault();run(!running)}
+  if(e.key==='s'||e.key==='S'){if(!running)step()}
+  if(e.key==='c'||e.key==='C')reset()});
+// rule editor
+const btns={b:[],s:[]};
+function build(el,set,cls,k){for(let n=0;n<=8;n++){const b=document.createElement('button');b.className='cb';b.textContent=n;
+  b.onclick=()=>{set.has(n)?set.delete(n):set.add(n);sync();$('presetSelect').value='custom';$('sampleSelect').value=''};
+  el.appendChild(b);btns[k].push(b)}}
+function sync(){btns.b.forEach((b,n)=>b.classList.toggle('b',B.has(n)));btns.s.forEach((b,n)=>b.classList.toggle('s',S.has(n)));$('ruleText').textContent=CA.fmt(B,S)}
+function setRule(str){const r=CA.parse(str);if(!r)return false;B=r.B;S=r.S;sync();
+  const norm=CA.fmt(B,S);$('presetSelect').value=[...$('presetSelect').options].some(o=>o.value===norm)?norm:'custom';
+  $('sampleSelect').value=[...$('sampleSelect').options].some(o=>o.value===norm)?norm:'';return true}
+build($('birthCounts'),B,'b','b');build($('surviveCounts'),S,'s','s');
+$('presetSelect').onchange=e=>{if(e.target.value!=='custom')setRule(e.target.value)};
+// sampled rules, grouped by class
+(function(){const sel=$('sampleSelect'),list=CA.samples();
+  if(!list.length){sel.innerHTML='<option value="">Run the rule sampler first</option>';sel.disabled=true;return}
+  sel.innerHTML='<option value="">Choose a sampled rule…</option>';
+  ['mobile','oscillating','chaotic','growth','still','extinct'].forEach(c=>{
+    const items=list.filter(r=>r.cls===c);if(!items.length)return;
+    const g=document.createElement('optgroup');g.label=c+' ('+items.length+')';
+    items.forEach(r=>{const o=document.createElement('option');o.value=r.rule;o.textContent=r.rule;g.appendChild(o)});sel.appendChild(g)})})();
+$('sampleSelect').onchange=e=>{if(e.target.value)setRule(e.target.value)};
+// hash loading: index.html#B36/S23
+function fromHash(){const h=decodeURIComponent(location.hash.slice(1));if(h&&setRule(h)){reset(Uint8Array.from({length:cols*rows},()=>Math.random()<$('density').value/100?1:0))}}
+addEventListener('hashchange',fromHash);
+addEventListener('themechange',()=>{colors();draw()});
+addEventListener('resize',resize);
+colors();sync();resize();fromHash();
 })();
 </script>
 </body>

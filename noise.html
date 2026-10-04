@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noise Sweep · Cellular Automaton Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Fredoka:wght@500;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="shared.js"></script>
+<style>table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:7px 10px;text-align:right;border-bottom:1px dashed var(--line)}th:first-child,td:first-child{text-align:left}th{color:var(--teal);font-family:'Fredoka',sans-serif}#chart{width:100%;height:340px;display:block}.hit{background:var(--peach)}</style>
+</head>
+<body>
+<div class="top">Is there a tipping point?</div>
+<div class="brand"><h1 class="rainbow">Noise Sweep</h1><p class="script">how much chaos can a rule take?</p></div>
+<nav><a href="index.html">Simulator</a><a href="sampler.html">Rule sampler</a><a class="on" href="noise.html">Noise sweep</a><a href="3d.html">3D</a><button id="themeBtn">Dark mode</button></nav>
+<div class="wrap">
+  <p class="intro">Runs one rule from many random starts at each noise level. Every step, each cell flips with the given probability. Look for a noise level where the final density suddenly changes: that is evidence of a threshold.</p>
+  <div class="board-panel controls">
+    <div class="field" style="width:140px"><label>Rule</label><input id="rule" value="B3/S23"></div>
+    <div class="field" style="width:260px"><label>Noise levels (% per cell per step)</label><input id="levels" value="0,0.01,0.02,0.05,0.1,0.2,0.5,1,2,5"></div>
+    <div class="field"><label>Trials per level</label><input type="number" id="trials" value="10" min="1" max="50"></div>
+    <div class="field"><label>Steps</label><input type="number" id="steps" value="300" min="60" max="2000"></div>
+    <div class="field"><label>Grid size</label><input type="number" id="size" value="50" min="10" max="100"></div>
+    <div class="field"><label>Start density</label><input type="number" id="dens" value="0.3" min="0.05" max="0.9" step="0.05"></div>
+    <div class="field"><label>Seed</label><input type="number" id="seed" value="2026"></div>
+    <button class="btn primary" id="runBtn">Run sweep</button>
+    <button class="btn" id="csvBtn" disabled>Export CSV</button>
+    <span class="mono" id="prog"></span>
+  </div>
+  <div class="board-panel" style="margin-top:18px">
+    <canvas id="chart"></canvas>
+    <div class="legend"><span><i class="dot" style="background:var(--orange)"></i>mean final density (band = min to max over trials)</span><span><i class="dot" style="background:var(--teal)"></i>fraction of trials that collapsed (density under 1%)</span></div>
+    <p class="note" id="verdict">Run a sweep to see results.</p>
+  </div>
+  <div class="board-panel" style="margin-top:18px;overflow-x:auto"><table><thead><tr><th>Noise %</th><th>Mean density</th><th>Min</th><th>Max</th><th>Collapsed</th><th>Activity</th></tr></thead><tbody id="rows"></tbody></table></div>
+  <footer>Final density is averaged over the last 50 steps. Edges wrap. Same seed and settings reproduce the same numbers. Try the same sweep on B36/S23 or B3678/S34678 to compare rules.</footer>
+</div>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);let res=[];
+if(location.hash.length>1)$('rule').value=decodeURIComponent(location.hash.slice(1));
+function sim(r,size,steps,d0,p,rnd){
+  const area=size*size;let g=Uint8Array.from({length:area},()=>rnd()<d0?1:0),tail=[],act=0,na=0;
+  for(let t=0;t<steps;t++){
+    const n=CA.step(g,size,size,r.B,r.S);
+    if(p>0)for(let i=0;i<area;i++)if(rnd()<p)n[i]^=1;
+    let pop=0,ch=0;for(let i=0;i<area;i++){pop+=n[i];ch+=n[i]^g[i]}
+    g=n;if(t>=steps-50){tail.push(pop/area);act+=ch/area;na++}}
+  return{den:tail.reduce((a,b)=>a+b,0)/tail.length,act:act/na}}
+function chart(){
+  const c=$('chart'),d=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*d;c.height=h*d;
+  const x=c.getContext('2d');x.setTransform(d,0,0,d,0,0);x.clearRect(0,0,w,h);
+  const L=46,R=16,T=14,Bm=36,pw=w-L-R,ph=h-T-Bm,ink=CA.css('--dim'),line=CA.css('--line');
+  const ymax=Math.max(.1,Math.ceil(Math.max(...res.map(r=>r.max),.1)*10)/10);
+  const px=i=>L+(res.length<2?pw/2:i*pw/(res.length-1)),py=v=>T+ph-v/ymax*ph;
+  x.font='11px Poppins,sans-serif';x.fillStyle=ink;x.strokeStyle=line;x.lineWidth=1;x.textAlign='right';
+  for(let k=0;k<=4;k++){const v=ymax*k/4;x.beginPath();x.moveTo(L,py(v));x.lineTo(w-R,py(v));x.stroke();x.fillText(v.toFixed(2),L-6,py(v)+4)}
+  x.textAlign='center';res.forEach((r,i)=>x.fillText(r.p+'%',px(i),h-Bm+16));
+  x.fillText('noise per cell per step',L+pw/2,h-6);
+  if(!res.length)return;
+  const orange=CA.css('--orange'),teal=CA.css('--teal');
+  x.fillStyle=orange+'44';x.beginPath();res.forEach((r,i)=>x.lineTo(px(i),py(r.max)));
+  for(let i=res.length-1;i>=0;i--)x.lineTo(px(i),py(res[i].min));x.fill();
+  x.lineWidth=3;x.strokeStyle=orange;x.beginPath();res.forEach((r,i)=>i?x.lineTo(px(i),py(r.mean)):x.moveTo(px(i),py(r.mean)));x.stroke();
+  x.fillStyle=orange;res.forEach((r,i)=>{x.beginPath();x.arc(px(i),py(r.mean),4,0,7);x.fill()});
+  x.strokeStyle=teal;x.setLineDash([6,4]);x.beginPath();res.forEach((r,i)=>{const y=T+ph-r.col*ph;i?x.lineTo(px(i),y):x.moveTo(px(i),y)});x.stroke();x.setLineDash([])}
+function verdict(){
+  if(res.length<2)return;let bi=1,bd=0;
+  for(let i=1;i<res.length;i++){const dd=Math.abs(res[i].mean-res[i-1].mean);if(dd>bd){bd=dd;bi=i}}
+  const tot=Math.abs(res[res.length-1].mean-res[0].mean)||1e-9;
+  $('verdict').textContent=`Biggest change: between ${res[bi-1].p}% and ${res[bi].p}% noise, mean density moves by ${bd.toFixed(3)} (${(bd/tot*100).toFixed(0)}% of the full range across the sweep). A large share in one step suggests a threshold; a spread-out change suggests a gradual decline. Add levels near that gap to zoom in.`;
+  document.querySelectorAll('#rows tr').forEach((tr,i)=>tr.classList.toggle('hit',i===bi||i===bi-1))}
+async function run(){
+  const rule=CA.parse($('rule').value.trim());if(!rule){$('prog').textContent='Rule must look like B3/S23';return}
+  const lv=$('levels').value.split(',').map(Number).filter(v=>v>=0&&v<=100),T=+$('trials').value,steps=+$('steps').value,size=+$('size').value,d0=+$('dens').value,seed=+$('seed').value;
+  const rnd=CA.prng(seed);res=[];$('rows').innerHTML='';$('runBtn').disabled=true;$('csvBtn').disabled=true;
+  for(const p of lv){
+    const rs=[];for(let t=0;t<T;t++){rs.push(sim(rule,size,steps,d0,p/100,rnd));await new Promise(r=>setTimeout(r,0))}
+    const ds=rs.map(r=>r.den),m=a=>a.reduce((s,v)=>s+v,0)/a.length;
+    const o={p,mean:m(ds),min:Math.min(...ds),max:Math.max(...ds),col:ds.filter(v=>v<.01).length/T,act:m(rs.map(r=>r.act))};
+    res.push(o);$('rows').insertAdjacentHTML('beforeend',`<tr><td>${p}</td><td>${o.mean.toFixed(3)}</td><td>${o.min.toFixed(3)}</td><td>${o.max.toFixed(3)}</td><td>${(o.col*100).toFixed(0)}%</td><td>${(o.act*100).toFixed(1)}%</td></tr>`);
+    $('prog').textContent=`${res.length} / ${lv.length} levels`;chart()}
+  verdict();$('prog').textContent=`done: ${$('rule').value}, seed ${seed}`;$('runBtn').disabled=false;$('csvBtn').disabled=false}
+$('runBtn').onclick=run;
+$('csvBtn').onclick=()=>{
+  let s='rule,noise_pct,mean_density,min_density,max_density,collapsed_frac,activity,trials,steps,grid,start_density,seed\n';
+  const m=[$('trials').value,$('steps').value,$('size').value,$('dens').value,$('seed').value].join(',');
+  res.forEach(r=>s+=`${$('rule').value},${r.p},${r.mean.toFixed(4)},${r.min.toFixed(4)},${r.max.toFixed(4)},${r.col},${r.act.toFixed(4)},${m}\n`);
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([s],{type:'text/csv'}));a.download='noise_sweep.csv';a.click();URL.revokeObjectURL(a.href)};
+addEventListener('themechange',chart);addEventListener('resize',chart);
+addEventListener('DOMContentLoaded',chart);
+})();
+</script>
+</body>
+</html>
