@@ -3,7 +3,7 @@
 An interactive lab for exploring how complex behavior emerges from simple rules.
 Plain HTML, CSS and JavaScript. No build step, no dependencies.
 
-**Live site:** https://YOUR-USERNAME.github.io/YOUR-REPO/
+**Live site:** https://shreyashetty-24.github.io/cellular-automaton-lab/
 
 ## Pages
 
@@ -13,29 +13,3 @@ Plain HTML, CSS and JavaScript. No build step, no dependencies.
 | `sampler.html` | Samples random outer-totalistic rules, classifies them (extinct, still, oscillating, mobile, growth, chaotic), exports CSV |
 | `noise.html` | Noise sweep: density versus noise level, for finding thresholds |
 | `3d.html` | 3D automaton (Option A): rotatable renderer, 26-neighbor rules, grid-size benchmark, 2D vs 3D random-rule survey |
-
-Shared code: `style.css` (light and dark themes), `shared.js` (rule parsing, fast 2D stepper, seeded random numbers).
-
-## Run locally
-
-Open `index.html` in a browser. To test saved sampler presets across pages, serve the folder instead:
-
-```
-python3 -m http.server 8000
-```
-
-then visit http://localhost:8000.
-
-## Reproducing results
-
-The sampler, noise sweep and survey take a seed. The same seed and settings give the same numbers. CSV exports include the settings.
-
-## Notes
-
-- Edges wrap (torus) in every simulator.
-- 3D rules use counts 0 to 26, written like `B6/S5-7`.
-- Sampled rules are saved in your browser's localStorage, so run the sampler once before using the simulator's sampled-rule dropdown.
-
-## Deploy
-
-Repo Settings, Pages, Source: "Deploy from a branch", branch `main`, folder `/ (root)`.
