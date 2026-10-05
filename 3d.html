@@ -11,10 +11,10 @@
 </head>
 <body>
 <div class="top">Life, one dimension up</div>
-<div class="brand"><h1 class="rainbow">3D Automaton</h1><p class="script">drag to rotate, 26 neighbors per cell</p></div>
+<div class="brand"><h1 class="rainbow">3D Automaton</h1><p class="script">drag to rotate, scroll to zoom, right-drag to pan</p></div>
 <nav><a href="index.html">Simulator</a><a href="sampler.html">Rule sampler</a><a href="noise.html">Noise sweep</a><a class="on" href="3d.html">3D</a><button id="themeBtn">Dark mode</button></nav>
 <div class="wrap">
-  <p class="intro">A cell has 26 neighbors (the surrounding 3×3×3 block). Rules are written like B6/S5-7, with counts from 0 to 26 separated by commas and ranges. Near cubes are warm, far cubes are cool. Edges wrap.</p>
+  <p class="intro">A cell has 26 neighbors (the surrounding 3×3×3 block). Rules are written like B6/S5-7, with counts from 0 to 26 separated by commas and ranges. Cubes are shaded by face and outlined, near ones warm and far ones cool. Use Slice to show only some layers. Edges wrap.</p>
   <div class="rule-readout"><span class="lbl">current rule</span><span id="ruleText">B6/S5-7</span></div>
   <div class="layout">
     <div class="board-panel">
@@ -24,10 +24,14 @@
         <button class="btn" id="clearBtn">Clear</button><button class="btn teal" id="randBtn">Random fill</button>
         <span class="sp"></span><span class="mono" id="stat">gen 0</span>
       </div>
-      <div class="row">Speed <input type="range" id="speed" min="1" max="30" value="8"><span id="speedL">8 fps</span><span class="sp"></span>
+      <div class="row">Speed <input type="range" id="speed" min="1" max="60" value="8"><span id="speedL">8 fps</span> × <input type="range" id="spf" min="1" max="50" value="1"><span id="spfL">1/frame</span><span class="sp"></span>
         Fill density <input type="range" id="dens" min="5" max="60" value="25"><span id="densL">25%</span></div>
       <div class="row">Fill region <input type="range" id="reg" min="20" max="100" value="50"><span id="regL">50%</span><span class="sp"></span>
         <label><input type="checkbox" id="auto" checked> auto-rotate</label></div>
+      <div class="row"><label><input type="checkbox" id="newb" checked> highlight newborn cells (purple)</label><span class="sp"></span><label><input type="checkbox" id="outl" checked> outlines</label></div>
+      <div class="row">Slice <select id="ax" style="width:auto"><option value="">off</option><option value="x">x</option><option value="y">y</option><option value="z">z</option></select><input type="range" id="lo" min="0" max="23" value="0" aria-label="Slice start"><input type="range" id="hi" min="0" max="23" value="23" aria-label="Slice end"><span id="sliceL"></span></div>
+      <div class="row">Noise <input type="range" id="noise" min="0" max="500" value="0"><span id="noiseL">0.00%</span><span class="sp"></span>Edges <select id="wrap" style="width:auto"><option value="wrap">wrap</option><option value="dead">dead</option></select><button class="btn" id="viewBtn" style="padding:7px 11px">Reset view</button></div>
+      <canvas id="plot" class="plot"></canvas>
     </div>
     <div class="side">
       <div class="card"><h2>Rule</h2>
@@ -40,6 +44,7 @@
       </div>
       <div class="card"><h2>Grid size</h2>
         <div class="seg" id="sizes"><button class="btn" data-n="16">16</button><button class="btn on" data-n="24">24</button><button class="btn" data-n="32">32</button><button class="btn" data-n="48">48</button><button class="btn" data-n="64">64</button></div>
+        <div class="row" style="margin-top:12px">Side <input type="number" id="nIn" value="24" min="8" max="256" style="width:84px"><button class="btn sm teal" id="nApply">Apply</button></div>
         <button class="btn sm" id="bench" style="margin-top:12px">Benchmark sizes</button>
       </div>
       <div class="card"><h2>Random-rule survey</h2>
@@ -66,40 +71,54 @@ const parseSet=t=>{const s=new Set();for(const p of t.split(',').filter(Boolean)
 const parse=str=>{const m=/^B([\d,\-]*)\/S([\d,\-]*)$/i.exec(str.trim());if(!m)return null;const B=parseSet(m[1]),S=parseSet(m[2]);return B&&S?{B,S}:null};
 const fmt=(B,S)=>'B'+fmtSet(B)+'/S'+fmtSet(S),tab=s=>{const t=new Uint8Array(27);s.forEach(k=>t[k]=1);return t};
 const bufs={};const buf=N=>bufs[N]||(bufs[N]=[new Uint8Array(N*N*N),new Uint8Array(N*N*N)]);
-function step3(g,N,b,s){
+function step3(g,N,b,s,dead){
   const N2=N*N,n=new Uint8Array(N2*N),[t1,t2]=buf(N);
   for(let z=0;z<N;z++)for(let y=0;y<N;y++){const o=z*N2+y*N;for(let x=0;x<N;x++)t1[o+x]=g[o+(x?x-1:N-1)]+g[o+x]+g[o+(x<N-1?x+1:0)]}
   for(let z=0;z<N;z++){const o=z*N2;for(let y=0;y<N;y++){const u=o+(y?y-1:N-1)*N,m=o+y*N,d=o+(y<N-1?y+1:0)*N;for(let x=0;x<N;x++)t2[m+x]=t1[u+x]+t1[m+x]+t1[d+x]}}
   for(let z=0;z<N;z++){const u=(z?z-1:N-1)*N2,m=z*N2,d=(z<N-1?z+1:0)*N2;for(let i=0;i<N2;i++){const k=t2[u+i]+t2[m+i]+t2[d+i]-g[m+i];n[m+i]=g[m+i]?s[k]:b[k]}}
+  if(dead)for(let a=0;a<N;a++)for(let q=0;q<N;q++){n[a*N+q]=n[(N-1)*N2+a*N+q]=n[a*N2+q]=n[a*N2+(N-1)*N+q]=n[a*N2+q*N]=n[a*N2+q*N+N-1]=0}
   return n}
 const count=g=>{let p=0;for(let i=0;i<g.length;i++)p+=g[i];return p};
-let N=24,g=new Uint8Array(N**3),B=new Set([6]),S=new Set([5,6,7]),bT=tab(B),sT=tab(S),running=false,gen=0,last=0,fps=8,ax=.5,ay=.6,dirty=true,drag=false,lx=0,ly=0,W=600,H=480,col={},cols=[],msStep=0;
+let prev=null,dead=false,noise=0,zoom=1,pdx=0,pdy=0,spf=1,hist=[],pan=false,N=24,g=new Uint8Array(N**3),B=new Set([6]),S=new Set([5,6,7]),bT=tab(B),sT=tab(S),running=false,gen=0,last=0,fps=8,ax=.5,ay=.6,dirty=true,drag=false,lx=0,ly=0,W=600,H=480,col={},cols=[],colsN=[],msStep=0;
 function fill(){const f=$('reg').value/100,d=$('dens').value/100,lo=Math.floor(N*(1-f)/2),hi=Math.ceil(N*(1+f)/2);g=new Uint8Array(N**3);
-  for(let z=lo;z<hi;z++)for(let y=lo;y<hi;y++)for(let x=lo;x<hi;x++)g[z*N*N+y*N+x]=Math.random()<d?1:0;gen=0;dirty=true;info()}
+  for(let z=lo;z<hi;z++)for(let y=lo;y<hi;y++)for(let x=lo;x<hi;x++)g[z*N*N+y*N+x]=Math.random()<d?1:0;gen=0;prev=null;hist=[];dirty=true;info()}
 function info(){const p=count(g);$('stat').textContent=`gen ${gen} · ${p} cells · ${(p/N**3*100).toFixed(1)}% · ${msStep.toFixed(1)} ms/step`}
-function step(){const t=performance.now();g=step3(g,N,bT,sT);msStep=performance.now()-t;gen++;dirty=true;info()}
+function step(){const t=performance.now();prev=g;g=step3(g,N,bT,sT,dead);if(noise>0){const e=noise*g.length;let k=Math.floor(e)+(Math.random()<e%1?1:0);while(k--)g[Math.random()*g.length|0]^=1}msStep=performance.now()-t;gen++;dirty=true;hist.push(count(g)/N**3);if(hist.length>2000)hist.splice(0,1000)}
 const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
-function colors(){col={bg:CA.css('--canvas'),line:CA.css('--line')};const far=[143,193,196],mid=[237,165,198],near=rgb(CA.css('--live')),K=28;
-  cols=Array.from({length:K},(_,b)=>{const t=b/(K-1),[a,c,u]=t<.5?[far,mid,t*2]:[mid,near,(t-.5)*2];return`rgb(${a.map((v,i)=>Math.round(v+(c[i]-v)*u))})`});dirty=true}
+function colors(){
+  col={bg:CA.css('--canvas'),line:CA.css('--line'),edge:document.documentElement.dataset.theme==='dark'?'rgba(0,0,0,.6)':'rgba(70,40,40,.45)'};
+  const far=[143,193,196],mid=[237,165,198],near=rgb(CA.css('--live')),K=48,sh=[.78,1,.6],mk=(a,c,u)=>a.map((v,i)=>v+(c[i]-v)*u);
+  const shade=r=>sh.map(m=>`rgb(${r.map(v=>Math.round(Math.min(255,v*m)))})`);
+  cols=Array.from({length:K},(_,b)=>{const t=b/(K-1);return shade(t<.5?mk(far,mid,t*2):mk(mid,near,(t-.5)*2))});
+  colsN=Array.from({length:K},(_,b)=>shade(mk([160,120,225],[120,60,200],b/(K-1))));dirty=true}
 function resize(){W=Math.min(cv.parentElement.clientWidth-34,760);H=Math.round(W*.8);const d=devicePixelRatio||1;cv.style.width=W+'px';cv.style.height=H+'px';cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0);dirty=true}
 function draw(){
   ctx.fillStyle=col.bg;ctx.fillRect(0,0,W,H);
-  const sa=Math.sin(ay),ca=Math.cos(ay),sx=Math.sin(ax),cx=Math.cos(ax),sc=Math.min(W,H)/(N*1.7),c=(N-1)/2,D=3*N,mx=W/2,my=H/2,K=cols.length;
-  const P=(X,Y,Z)=>{const x1=X*ca+Z*sa,z1=-X*sa+Z*ca,y1=Y*cx-z1*sx,z2=Y*sx+z1*cx,f=1/(1-z2/D);return[mx+x1*sc*f,my+y1*sc*f,z2,f]};
+  const sa=Math.sin(ay),ca=Math.cos(ay),sx=Math.sin(ax),cx=Math.cos(ax),sc=Math.min(W,H)/(N*1.7)*zoom,c=(N-1)/2,D=3*N,mx=W/2+pdx,my=H/2+pdy,K=cols.length;
+  const P=(X,Y,Z)=>{const x1=X*ca+Z*sa,z1=-X*sa+Z*ca,y1=Y*cx-z1*sx,z2=Y*sx+z1*cx,f=1/(1-z2/D);return[mx+x1*sc*f,my+y1*sc*f]};
   const h=N/2,V=[];for(let i=0;i<8;i++)V.push(P(i&1?h:-h,i&2?h:-h,i&4?h:-h));
   ctx.strokeStyle=col.line;ctx.lineWidth=1.5;ctx.beginPath();
   for(let i=0;i<8;i++)for(const b of[1,2,4])if(!(i&b)){ctx.moveTo(V[i][0],V[i][1]);ctx.lineTo(V[i|b][0],V[i|b][1])}ctx.stroke();
-  const L=Array.from({length:K},()=>[]);
+  // the three cube faces that point toward the camera, as screen offsets from the cell center
+  const sg=[Math.sign(-sa*cx)||1,Math.sign(sx)||1,Math.sign(ca*cx)||1],q=.44;
+  const F=[0,1,2].map(a=>{const u=(a+1)%3,v=(a+2)%3;return[[1,1],[-1,1],[-1,-1],[1,-1]].map(([p,r])=>{const w=[0,0,0];w[a]=sg[a]*q;w[u]=p*q;w[v]=r*q;return[w[0]*ca+w[2]*sa,w[1]*cx-(-w[0]*sa+w[2]*ca)*sx]})});
+  const axis=$('ax').value?'xyz'.indexOf($('ax').value):-1,lo=Math.min($('lo').value,$('hi').value),hi=Math.max($('lo').value,$('hi').value),showNew=$('newb').checked&&prev&&prev.length===g.length;
+  const L=Array.from({length:K},()=>[]),Ln=Array.from({length:K},()=>[]);
   for(let z=0,i=0;z<N;z++)for(let y=0;y<N;y++)for(let x=0;x<N;x++,i++)if(g[i]){
+    if(axis>=0){const v=axis===0?x:axis===1?y:z;if(v<lo||v>hi)continue}
     const X=x-c,Y=y-c,Z=z-c,x1=X*ca+Z*sa,z1=-X*sa+Z*ca,y1=Y*cx-z1*sx,z2=Y*sx+z1*cx,f=1/(1-z2/D);
-    const b=Math.min(K-1,Math.max(0,((z2/(N*.9)+1)*K/2)|0));L[b].push(mx+x1*sc*f,my+y1*sc*f,sc*f)}
-  for(let b=0;b<K;b++){ctx.fillStyle=cols[b];const l=L[b];for(let j=0;j<l.length;j+=3){const s=l[j+2]*.92;ctx.fillRect(l[j]-s/2,l[j+1]-s/2,s,s)}}}
+    const b=Math.min(K-1,Math.max(0,((z2/(N*.9)+1)*K/2)|0));(showNew&&!prev[i]?Ln:L)[b].push(mx+x1*sc*f,my+y1*sc*f,sc*f)}
+  const edge=$('outl').checked&&sc>=4;ctx.strokeStyle=col.edge;ctx.lineWidth=Math.min(1.2,sc/6);ctx.lineJoin='round';
+  const batch=(l,cs)=>{if(!l.length)return;for(let a=0;a<3;a++){ctx.fillStyle=cs[a];ctx.beginPath();const o=F[a];
+    for(let j=0;j<l.length;j+=3){const px=l[j],py=l[j+1],s=l[j+2];ctx.moveTo(px+o[0][0]*s,py+o[0][1]*s);for(let k=1;k<4;k++)ctx.lineTo(px+o[k][0]*s,py+o[k][1]*s);ctx.closePath()}
+    ctx.fill();if(edge)ctx.stroke()}};
+  for(let b=0;b<K;b++){batch(L[b],cols[b]);batch(Ln[b],colsN[b])}}
 function frame(t){
-  if(running&&t-last>=1000/fps){last=t;step()}
+  if(running&&t-last>=1000/fps-2){last=t;const t0=performance.now();for(let i=0;i<spf&&(i<1||performance.now()-t0<40);i++)step();info()}
   if($('auto').checked&&!drag){ay+=.005;dirty=true}
-  if(dirty){dirty=false;draw()}requestAnimationFrame(frame)}
-cv.addEventListener('pointerdown',e=>{drag=true;lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId)});
-cv.addEventListener('pointermove',e=>{if(!drag)return;ay+=(e.clientX-lx)*.01;ax=Math.max(-1.5,Math.min(1.5,ax+(e.clientY-ly)*.01));lx=e.clientX;ly=e.clientY;dirty=true});
+  if(dirty){dirty=false;draw();CA.plot($('plot'),hist)}requestAnimationFrame(frame)}
+cv.addEventListener('pointerdown',e=>{drag=true;pan=e.button!==0||e.shiftKey;lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId)});
+cv.addEventListener('pointermove',e=>{if(!drag)return;if(pan){pdx+=e.clientX-lx;pdy+=e.clientY-ly}else{ay+=(e.clientX-lx)*.01;ax=Math.max(-1.5,Math.min(1.5,ax+(e.clientY-ly)*.01))}lx=e.clientX;ly=e.clientY;dirty=true});
 addEventListener('pointerup',()=>drag=false);
 // rule editor
 const bt={b:[],s:[]};
@@ -114,13 +133,13 @@ $('pre').onchange=e=>setRule(e.target.value);
 $('rndRule').onclick=()=>{const r=p=>{const s=new Set();for(let n=0;n<=26;n++)if(Math.random()<p)s.add(n);return s};B=r(.2);S=r(.3);sync();fill()};
 // controls
 $('playBtn').onclick=()=>{running=!running;$('playBtn').textContent=running?'Pause':'Run'};
-$('stepBtn').onclick=()=>{if(!running)step()};
-$('clearBtn').onclick=()=>{g=new Uint8Array(N**3);gen=0;dirty=true;info()};
+$('stepBtn').onclick=()=>{if(!running){step();info()}};
+$('clearBtn').onclick=()=>{g=new Uint8Array(N**3);gen=0;prev=null;hist=[];dirty=true;info()};
 $('randBtn').onclick=fill;
 $('speed').oninput=e=>{fps=+e.target.value;$('speedL').textContent=fps+' fps'};
 $('dens').oninput=e=>$('densL').textContent=e.target.value+'%';
 $('reg').oninput=e=>$('regL').textContent=e.target.value+'%';
-document.querySelectorAll('#sizes .btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('#sizes .btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');N=+b.dataset.n;fill()});
+document.querySelectorAll('#sizes .btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('#sizes .btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');N=+b.dataset.n;$('nIn').value=N;$('lo').max=$('hi').max=N-1;$('lo').value=0;$('hi').value=N-1;fill()});
 addEventListener('keydown',e=>{if(['SELECT','INPUT'].includes(e.target.tagName))return;if(e.code==='Space'){e.preventDefault();$('playBtn').click()}if(e.key==='s')$('stepBtn').click()});
 // benchmark: time per step by grid size
 $('bench').onclick=async()=>{
@@ -152,6 +171,14 @@ $('survey').onclick=async()=>{
   $('found').innerHTML=found.length?'<div class="lab">3D rules that stayed active at moderate density (click to load)</div>'+found.map(r=>`<button class="btn sm" data-r="${r}">${r}</button>`).join(''):'';
   $('found').querySelectorAll('button').forEach(b=>b.onclick=()=>{setRule(b.dataset.r);fill();window.scrollTo({top:0,behavior:'smooth'})});
   $('survey').disabled=false};
+['ax','lo','hi','newb','outl'].forEach(k=>$(k).oninput=()=>{$('sliceL').textContent=$('ax').value?$('ax').value+' '+Math.min($('lo').value,$('hi').value)+' to '+Math.max($('lo').value,$('hi').value):'';dirty=true});
+$('spf').oninput=e=>{spf=+e.target.value;$('spfL').textContent=spf+'/frame'};
+$('noise').oninput=e=>{const p=e.target.value/100;noise=p/100;$('noiseL').textContent=p.toFixed(2)+'%'};
+$('wrap').onchange=e=>dead=e.target.value==='dead';
+$('nApply').onclick=()=>{N=Math.max(8,Math.min(256,+$('nIn').value||24));$('nIn').value=N;$('lo').max=$('hi').max=N-1;$('lo').value=0;$('hi').value=N-1;document.querySelectorAll('#sizes .btn').forEach(x=>x.classList.toggle('on',+x.dataset.n===N));fill()};
+cv.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.3,Math.min(10,zoom*Math.exp(-e.deltaY*.0015)));dirty=true},{passive:false});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+$('viewBtn').onclick=()=>{zoom=1;pdx=pdy=0;dirty=true};
 addEventListener('themechange',colors);addEventListener('resize',resize);
 colors();resize();sync();fill();requestAnimationFrame(frame);
 })();

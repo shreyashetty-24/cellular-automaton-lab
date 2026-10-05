@@ -13,7 +13,7 @@
 <div class="brand"><h1 class="rainbow">Cellular Automaton Lab</h1><p class="script">draw it, run it, break it</p></div>
 <nav><a class="on" href="index.html">Simulator</a><a href="sampler.html">Rule sampler</a><a href="noise.html">Noise sweep</a><a href="3d.html">3D</a><button id="themeBtn">Dark mode</button></nav>
 <div class="wrap">
-  <p class="intro">Draw a pattern or fill randomly, then run it. Toggle neighbor counts to change which rule governs birth and survival. Edges wrap around (the grid is a torus).</p>
+  <p class="intro">Draw a pattern or fill randomly, then run it. Toggle neighbor counts to change which rule governs birth and survival. Scroll to zoom, right-drag or shift-drag to pan. Edge behavior is set under Grid.</p>
   <div class="rule-readout"><span class="lbl">current rule</span><span id="ruleText">B3/S23</span></div>
   <div class="layout">
     <div class="board-panel">
@@ -26,10 +26,12 @@
         <span class="sp"></span><span class="mono" id="genCount">gen 0</span>
       </div>
       <div class="row">
-        Speed <input type="range" id="speed" min="1" max="60" value="12"><span id="speedLabel">12 fps</span>
+        Speed <input type="range" id="speed" min="1" max="60" value="12"><span id="speedLabel">12 fps</span> × <input type="range" id="spf" min="1" max="100" value="1"><span id="spfL">1/frame</span><label><input type="checkbox" id="turbo"> max</label>
         <span class="sp"></span>
         Density <input type="range" id="density" min="5" max="60" value="30"><span id="densityLabel">30%</span>
       </div>
+      <div class="row"><button class="btn" id="fitBtn">Fit</button><button class="btn" id="zin">Zoom +</button><button class="btn" id="zout">Zoom −</button></div>
+      <canvas id="plot" class="plot"></canvas>
     </div>
     <div class="side">
       <div class="card"><h2>Presets</h2>
@@ -57,52 +59,74 @@
         <div class="row" style="margin-top:0">Flip chance <input type="range" id="noise" min="0" max="500" value="0"><span id="noiseLabel">0.00%</span></div>
         <p class="note">Each step, every cell flips with this probability. Use it to test whether patterns are robust or fragile.</p>
       </div>
-      <div class="card"><h2>Grid size</h2>
-        <div class="seg" id="sizes"><button class="btn" data-c="40" data-r="28">40×28</button><button class="btn on" data-c="70" data-r="50">70×50</button><button class="btn" data-c="110" data-r="78">110×78</button></div>
-      </div>
+      <div class="card"><h2>Grid</h2>
+        <div class="row" style="margin:0"><input type="number" id="wIn" value="70" min="8" max="2000" style="width:84px" aria-label="Width"> × <input type="number" id="hIn" value="50" min="8" max="2000" style="width:84px" aria-label="Height"><button class="btn teal" id="applySize" style="padding:9px 12px">Apply</button></div>
+        <div class="seg" id="sizes" style="margin-top:10px"><button class="btn" data-w="70" data-h="50">70</button><button class="btn" data-w="200" data-h="140">200</button><button class="btn" data-w="500" data-h="350">500</button><button class="btn" data-w="1000" data-h="700">1000</button></div>
+        <div class="lab">Boundary</div><select id="wrap"><option value="wrap">Wrap around (torus)</option><option value="dead">Dead edge (outer ring stays empty)</option></select>
+        <p class="note">Up to 2000×2000. Resizing keeps your pattern centered. A dead edge is outlined in orange.</p></div>
     </div>
   </div>
-  <footer>Click or drag to draw · <span class="kbd">Space</span> run/pause · <span class="kbd">S</span> step · <span class="kbd">C</span> clear</footer>
+  <footer>Click or drag to draw · <span class="kbd">Space</span> run/pause · <span class="kbd">S</span> step · <span class="kbd">C</span> clear · wheel zoom · right-drag pan</footer>
 </div>
 <script>
 (()=>{
-const $=id=>document.getElementById(id),cv=$('board'),ctx=cv.getContext('2d');
-let cols=70,rows=50,cell,W,H,grid=new Uint8Array(cols*rows),running=false,gen=0,last=0,fps=12,raf,painting=false,pv=1,B=new Set([3]),S=new Set([2,3]),noise=0,col={};
-const idx=(x,y)=>y*cols+x,gc=()=>$('genCount').textContent='gen '+gen;
-function colors(){col={live:CA.css('--live'),bg:CA.css('--canvas'),grid:CA.css('--grid')}}
-function resize(){const d=devicePixelRatio||1;W=cv.parentElement.clientWidth-34;cell=W/cols;H=cell*rows;
-  cv.style.width=W+'px';cv.style.height=H+'px';cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0);draw()}
+const $=id=>document.getElementById(id),cv=$('board'),ctx=cv.getContext('2d'),off=document.createElement('canvas'),octx=off.getContext('2d');
+let cols=70,rows=50,grid=new Uint8Array(cols*rows),running=false,gen=0,fps=12,spf=1,turbo=false,mode='',pv=1,B=new Set([3]),S=new Set([2,3]),noise=0,dead=false,col={},W=600,H=420,z=8,ox=0,oy=0,last=null,hist=[],dirty=true,lt=0,acc=0,t1=0,sps=0,lx=0,ly=0,im,d32;
+const gc=()=>$('genCount').textContent='gen '+gen+(running?' · '+Math.round(sps)+' steps/s':'');
+const px=h=>{const[r,g,b]=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));return(255<<24|b<<16|g<<8|r)>>>0};
+function colors(){col={l:px(CA.css('--live')),b:px(CA.css('--canvas')),page:CA.css('--bg'),grid:CA.css('--grid')};dirty=true}
+function fit(){z=Math.min(W/cols,H/rows);ox=(W-cols*z)/2;oy=(H-rows*z)/2;dirty=true}
+function resize(){const d=devicePixelRatio||1;W=cv.parentElement.clientWidth-34;H=Math.round(Math.min(W*.75,innerHeight*.72));cv.style.width=W+'px';cv.style.height=H+'px';cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0);fit()}
 function draw(){
-  ctx.fillStyle=col.bg;ctx.fillRect(0,0,W,H);ctx.fillStyle=col.live;
-  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++)if(grid[idx(x,y)])ctx.fillRect(x*cell,y*cell,cell-(cell>6?1:0),cell-(cell>6?1:0));
-  if(cell>8){ctx.strokeStyle=col.grid;ctx.beginPath();
-    for(let x=0;x<=cols;x++){ctx.moveTo(x*cell,0);ctx.lineTo(x*cell,H)}
-    for(let y=0;y<=rows;y++){ctx.moveTo(0,y*cell);ctx.lineTo(W,y*cell)}
-    ctx.stroke()}}
+  if(!im||im.width!==cols||im.height!==rows){off.width=cols;off.height=rows;im=octx.createImageData(cols,rows);d32=new Uint32Array(im.data.buffer)}
+  const L=col.l,Bk=col.b;for(let i=0;i<grid.length;i++)d32[i]=grid[i]?L:Bk;octx.putImageData(im,0,0);
+  ctx.fillStyle=col.page;ctx.fillRect(0,0,W,H);ctx.imageSmoothingEnabled=false;ctx.drawImage(off,ox,oy,cols*z,rows*z);
+  if(z>8){ctx.strokeStyle=col.grid;ctx.lineWidth=1;ctx.beginPath();
+    const x0=Math.max(0,Math.floor(-ox/z)),x1=Math.min(cols,Math.ceil((W-ox)/z)),y0=Math.max(0,Math.floor(-oy/z)),y1=Math.min(rows,Math.ceil((H-oy)/z));
+    for(let x=x0;x<=x1;x++){ctx.moveTo(ox+x*z,oy+y0*z);ctx.lineTo(ox+x*z,oy+y1*z)}
+    for(let y=y0;y<=y1;y++){ctx.moveTo(ox+x0*z,oy+y*z);ctx.lineTo(ox+x1*z,oy+y*z)}ctx.stroke()}
+  ctx.strokeStyle=CA.css(dead?'--orange':'--line');ctx.lineWidth=2;ctx.strokeRect(ox,oy,cols*z,rows*z)}
 function step(){
-  const n=CA.step(grid,cols,rows,B,S);
-  if(noise>0)for(let i=0;i<n.length;i++)if(Math.random()<noise)n[i]^=1;
-  grid=n;gen++;gc();draw()}
-function loop(t){if(!running)return;if(t-last>=1000/fps){last=t;step()}raf=requestAnimationFrame(loop)}
-function run(v){running=v;$('playBtn').textContent=v?'Pause':'Run';if(v)raf=requestAnimationFrame(loop);else cancelAnimationFrame(raf)}
-function reset(g){grid=g||new Uint8Array(cols*rows);gen=0;gc();draw()}
-// painting
-const at=e=>{const r=cv.getBoundingClientRect();return[Math.floor((e.clientX-r.left)/cell),Math.floor((e.clientY-r.top)/cell)]};
-function paint(e){const[x,y]=at(e);if(x<0||y<0||x>=cols||y>=rows)return;grid[idx(x,y)]=pv;draw()}
-cv.addEventListener('pointerdown',e=>{painting=true;const[x,y]=at(e);if(x>=0&&y>=0&&x<cols&&y<rows)pv=grid[idx(x,y)]?0:1;paint(e);cv.setPointerCapture(e.pointerId)});
-cv.addEventListener('pointermove',e=>{if(painting)paint(e)});
-addEventListener('pointerup',()=>painting=false);
+  const n=CA.step(grid,cols,rows,B,S,dead);
+  if(noise>0){const e=noise*n.length;let k=Math.floor(e)+(Math.random()<e%1?1:0);while(k--)n[Math.random()*n.length|0]^=1}
+  let p=0;for(let i=0;i<n.length;i++)p+=n[i];
+  grid=n;gen++;hist.push(p/n.length);if(hist.length>2000)hist.splice(0,1000);dirty=true}
+function loop(t){
+  if(running&&(turbo||t-lt>=1000/fps-2)){lt=t;const t0=performance.now(),lim=turbo?12:40,max=turbo?1e9:spf;let n=0;while(n<max&&(n<1||performance.now()-t0<lim)){step();n++}acc+=n}
+  if(t-t1>500){sps=acc/(t-t1)*1000;acc=0;t1=t;if(running)gc()}
+  if(dirty){dirty=false;draw();CA.plot($('plot'),hist);gc()}
+  requestAnimationFrame(loop)}
+function run(v){running=v;$('playBtn').textContent=v?'Pause':'Run';gc()}
+function reset(g){grid=g||new Uint8Array(cols*rows);gen=0;hist=[];dirty=true}
+function applySize(c,r){c=Math.max(8,Math.min(2000,c|0||70));r=Math.max(8,Math.min(2000,r|0||50));$('wIn').value=c;$('hIn').value=r;
+  const g=new Uint8Array(c*r),dx=(c-cols)>>1,dy=(r-rows)>>1;
+  for(let y=0;y<rows;y++){const ny=y+dy;if(ny<0||ny>=r)continue;for(let x=0;x<cols;x++){const nx=x+dx;if(nx>=0&&nx<c)g[ny*c+nx]=grid[y*cols+x]}}
+  cols=c;rows=r;grid=g;fit()}
+// drawing, zoom, pan
+const at=e=>{const r=cv.getBoundingClientRect();return[Math.floor((e.clientX-r.left-ox)/z),Math.floor((e.clientY-r.top-oy)/z)]};
+const put=(x,y)=>{if(x>=0&&y>=0&&x<cols&&y<rows)grid[y*cols+x]=pv};
+function paint(e){const[x,y]=at(e);if(last){const n=Math.max(Math.abs(x-last[0]),Math.abs(y-last[1]),1);for(let i=1;i<=n;i++)put(Math.round(last[0]+(x-last[0])*i/n),Math.round(last[1]+(y-last[1])*i/n))}else put(x,y);last=[x,y];dirty=true}
+cv.addEventListener('pointerdown',e=>{lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId);
+  if(e.button!==0||e.shiftKey){mode='pan';return}mode='paint';const[x,y]=at(e);pv=x>=0&&y>=0&&x<cols&&y<rows&&grid[y*cols+x]?0:1;last=null;paint(e)});
+cv.addEventListener('pointermove',e=>{if(mode==='paint')paint(e);else if(mode==='pan'){ox+=e.clientX-lx;oy+=e.clientY-ly;lx=e.clientX;ly=e.clientY;dirty=true}});
+addEventListener('pointerup',()=>{mode='';last=null});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+function zoomAt(mx,my,k){const nz=Math.min(80,Math.max(.05,z*k));ox=mx-(mx-ox)*nz/z;oy=my-(my-oy)*nz/z;z=nz;dirty=true}
+cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect();zoomAt(e.clientX-r.left,e.clientY-r.top,Math.exp(-e.deltaY*.0015))},{passive:false});
+$('zin').onclick=()=>zoomAt(W/2,H/2,1.4);$('zout').onclick=()=>zoomAt(W/2,H/2,1/1.4);$('fitBtn').onclick=fit;
 // controls
 $('playBtn').onclick=()=>run(!running);
 $('stepBtn').onclick=()=>{if(!running)step()};
 $('clearBtn').onclick=()=>reset();
-$('randomBtn').onclick=()=>{const d=$('density').value/100;reset(Uint8Array.from({length:cols*rows},()=>Math.random()<d?1:0))};
+$('randomBtn').onclick=()=>{const d=$('density').value/100,a=new Uint8Array(cols*rows);for(let i=0;i<a.length;i++)a[i]=Math.random()<d?1:0;reset(a)};
 $('speed').oninput=e=>{fps=+e.target.value;$('speedLabel').textContent=fps+' fps'};
+$('spf').oninput=e=>{spf=+e.target.value;$('spfL').textContent=spf+'/frame'};
+$('turbo').onchange=e=>turbo=e.target.checked;
 $('density').oninput=e=>$('densityLabel').textContent=e.target.value+'%';
 $('noise').oninput=e=>{const p=e.target.value/100;noise=p/100;$('noiseLabel').textContent=p.toFixed(2)+'%'};
-document.querySelectorAll('#sizes .btn').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('#sizes .btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');
-  cols=+b.dataset.c;rows=+b.dataset.r;reset();resize()});
+$('wrap').onchange=e=>{dead=e.target.value==='dead';dirty=true};
+$('applySize').onclick=()=>applySize(+$('wIn').value,+$('hIn').value);
+document.querySelectorAll('#sizes .btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('#sizes .btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');applySize(+b.dataset.w,+b.dataset.h)});
 addEventListener('keydown',e=>{
   if(['SELECT','INPUT'].includes(e.target.tagName))return;
   if(e.code==='Space'){e.preventDefault();run(!running)}
@@ -110,16 +134,14 @@ addEventListener('keydown',e=>{
   if(e.key==='c'||e.key==='C')reset()});
 // rule editor
 const btns={b:[],s:[]};
-function build(el,set,cls,k){for(let n=0;n<=8;n++){const b=document.createElement('button');b.className='cb';b.textContent=n;
-  b.onclick=()=>{set.has(n)?set.delete(n):set.add(n);sync();$('presetSelect').value='custom';$('sampleSelect').value=''};
-  el.appendChild(b);btns[k].push(b)}}
+function build(el,set,k){for(let n=0;n<=8;n++){const b=document.createElement('button');b.className='cb';b.textContent=n;
+  b.onclick=()=>{set.has(n)?set.delete(n):set.add(n);sync();$('presetSelect').value='custom';$('sampleSelect').value=''};el.appendChild(b);btns[k].push(b)}}
 function sync(){btns.b.forEach((b,n)=>b.classList.toggle('b',B.has(n)));btns.s.forEach((b,n)=>b.classList.toggle('s',S.has(n)));$('ruleText').textContent=CA.fmt(B,S)}
 function setRule(str){const r=CA.parse(str);if(!r)return false;B=r.B;S=r.S;sync();
   const norm=CA.fmt(B,S);$('presetSelect').value=[...$('presetSelect').options].some(o=>o.value===norm)?norm:'custom';
   $('sampleSelect').value=[...$('sampleSelect').options].some(o=>o.value===norm)?norm:'';return true}
-build($('birthCounts'),B,'b','b');build($('surviveCounts'),S,'s','s');
+build($('birthCounts'),B,'b');build($('surviveCounts'),S,'s');
 $('presetSelect').onchange=e=>{if(e.target.value!=='custom')setRule(e.target.value)};
-// sampled rules, grouped by class
 (function(){const sel=$('sampleSelect'),list=CA.samples();
   if(!list.length){sel.innerHTML='<option value="">Run the rule sampler first</option>';sel.disabled=true;return}
   sel.innerHTML='<option value="">Choose a sampled rule…</option>';
@@ -128,12 +150,9 @@ $('presetSelect').onchange=e=>{if(e.target.value!=='custom')setRule(e.target.val
     const g=document.createElement('optgroup');g.label=c+' ('+items.length+')';
     items.forEach(r=>{const o=document.createElement('option');o.value=r.rule;o.textContent=r.rule;g.appendChild(o)});sel.appendChild(g)})})();
 $('sampleSelect').onchange=e=>{if(e.target.value)setRule(e.target.value)};
-// hash loading: index.html#B36/S23
-function fromHash(){const h=decodeURIComponent(location.hash.slice(1));if(h&&setRule(h)){reset(Uint8Array.from({length:cols*rows},()=>Math.random()<$('density').value/100?1:0))}}
-addEventListener('hashchange',fromHash);
-addEventListener('themechange',()=>{colors();draw()});
-addEventListener('resize',resize);
-colors();sync();resize();fromHash();
+function fromHash(){const h=decodeURIComponent(location.hash.slice(1));if(h&&setRule(h))$('randomBtn').click()}
+addEventListener('hashchange',fromHash);addEventListener('themechange',colors);addEventListener('resize',resize);
+colors();sync();resize();fromHash();requestAnimationFrame(loop);
 })();
 </script>
 </body>
